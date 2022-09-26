@@ -49,6 +49,7 @@ class StableDiffusionOnnxPipeline(DiffusionPipeline):
         width: Optional[int] = 512,
         num_inference_steps: Optional[int] = 50,
         guidance_scale: Optional[float] = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
         eta: Optional[float] = 0.0,
         latents: Optional[np.ndarray] = None,
         output_type: Optional[str] = "pil",
@@ -81,9 +82,25 @@ class StableDiffusionOnnxPipeline(DiffusionPipeline):
         do_classifier_free_guidance = guidance_scale > 1.0
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance:
+            ucond_tokens: List[str]
+            if negative_prompt is None:
+                ucond_tokens = [""] * batch_size
+            elif type(prompt) is not type(negative_prompt):
+                raise TypeError("`negative_prompt` should be the same type to `prompt`.")
+            elif isinstance(negative_prompt, str):
+                ucond_tokens = [negative_prompt] * batch_size
+            elif batch_size != len(negative_prompt):
+                raise ValueError("The length of `negative_prompt` should be equal to batch_size.")
+            else:
+                ucond_tokens = negative_prompt
+
             max_length = text_input.input_ids.shape[-1]
             uncond_input = self.tokenizer(
-                [""] * batch_size, padding="max_length", max_length=max_length, return_tensors="np"
+                ucond_tokens,
+                padding="max_length",
+                max_length=max_length,
+                truncation=True,
+                return_tensors="np",
             )
             uncond_embeddings = self.text_encoder(input_ids=uncond_input.input_ids.astype(np.int32))[0]
 
